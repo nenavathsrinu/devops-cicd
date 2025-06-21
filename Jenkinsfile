@@ -12,7 +12,7 @@ pipeline {
   stages {
     stage('Clone Repository') {
       steps {
-        git url: 'https://github.com/nenavathsrinu/devops-cicd-ecs.git', branch: 'main'
+        git url: 'https://github.com/nenavathsrinu/devops-cicd.git', branch: 'main'
       }
     }
 
