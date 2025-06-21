@@ -34,55 +34,43 @@ pipeline {
     }
 
     stage('Deploy to ECS Fargate') {
-      steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-cred']]) {
-          sh '''
-            echo "⚙️ Registering new task definition..."
-
-            TASK_DEF=$(cat <<EOF
-            {
-              "family": "$REPO_NAME-task",
-              "networkMode": "awsvpc",
-              "executionRoleArn": "arn:aws:iam::$ACCOUNT_ID:role/$TASK_ROLE",
-              "containerDefinitions": [{
-                "name": "$CONTAINER",
-                "image": "$ECR_REPO:$IMAGE_TAG",
-                "portMappings": [{
-                  "containerPort": 3000,
-                  "hostPort": 3000,
-                  "protocol": "tcp"
-                }],
-                "essential": true
-              }],
-              "requiresCompatibilities": ["FARGATE"],
-              "cpu": "256",
-              "memory": "512"
-            }
-            EOF
-            )
-
-            echo "$TASK_DEF" > taskdef.json
-
-            aws ecs register-task-definition --cli-input-json file://taskdef.json
-
-            echo "🔄 Updating ECS service..."
-
-            aws ecs update-service \
-              --cluster $CLUSTER \
-              --service $SERVICE \
-              --task-definition $REPO_NAME-task
-          '''
+  steps {
+    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-cred']]) {
+      script {
+        def taskDef = """
+        {
+          "family": "${env.REPO_NAME}-task",
+          "networkMode": "awsvpc",
+          "executionRoleArn": "arn:aws:iam::${env.ACCOUNT_ID}:role/${env.TASK_ROLE}",
+          "containerDefinitions": [{
+            "name": "${env.CONTAINER}",
+            "image": "${env.ECR_REPO}:${env.IMAGE_TAG}",
+            "portMappings": [{
+              "containerPort": 3000,
+              "hostPort": 3000,
+              "protocol": "tcp"
+            }],
+            "essential": true
+          }],
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512"
         }
-      }
-    }
-  }
+        """
 
-  post {
-    success {
-      echo "✅ Deployment to ECS complete: $ECR_REPO:$IMAGE_TAG"
-    }
-    failure {
-      echo "❌ Deployment failed"
+        writeFile file: 'taskdef.json', text: taskDef
+
+        sh '''
+          echo "⚙️ Registering new ECS Task Definition..."
+          aws ecs register-task-definition --cli-input-json file://taskdef.json
+
+          echo "🔄 Updating ECS service..."
+          aws ecs update-service \
+            --cluster $CLUSTER \
+            --service $SERVICE \
+            --task-definition ${REPO_NAME}-task
+        '''
+      }
     }
   }
 }
